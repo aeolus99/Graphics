@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Voronoi图与三角网格切换对比</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://d3js.org/d3-delaunay.v6.min.js"></script>
+    <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #container { margin-bottom: 20px; }
+        button { padding: 8px 16px; font-size: 16px; cursor: pointer; }
+        .voronoi-cell:hover { stroke: #333 !important; stroke-width: 1.5px !important; }
+        .triangle:hover { stroke: red !important; stroke-width: 2px !important; }
+    </style>
+</head>
+<body>
+    <h1>Voronoi图与三角网格对比</h1>
+    <div id="container"></div>
+    <button id="toggleBtn">切换视图</button>
+    <div>
+        <p>当前显示: <span id="currentView">Voronoi图</span></p>
+    </div>
+    
+    <script>
+        // 1. 初始化设置
+        const width = 800, height = 600;
+        const svg = d3.select("#container").append("svg")
+            .attr("width", width)
+            .attr("height", height);
+        
+        // 2. 生成示例数据 - 随机点集
+        const points = d3.range(100).map(() => [
+            Math.random() * width,
+            Math.random() * height
+        ]);
+        
+        // 3. 创建Delaunay三角剖分
+        const delaunay = d3.Delaunay.from(points);
+        
+        // 4. 状态管理
+        let showVoronoi = true;
+        let currentElements = [];
+        
+        // 5. 视图生成函数
+        function generateVoronoi() {
+            // 清除现有元素
+            svg.selectAll("*").remove();
+            
+            const voronoi = delaunay.voronoi([0, 0, width, height]);
+            
+            // 绘制Voronoi图
+            svg.selectAll(".voronoi-cell")
+                .data(d3.range(points.length))
+                .enter().append("path")
+                .attr("class", "voronoi-cell")
+                .attr("d", (i) => voronoi.renderCell(i))
+                .attr("fill", () => d3.interpolateRainbow(Math.random()))
+                .attr("fill-opacity", 0.6)
+                .attr("stroke", "white")
+                .attr("stroke-width", 1)
+                .on("mouseover", function() {
+                    d3.select(this).attr("stroke", "red").attr("stroke-width", 2);
+                })
+                .on("mouseout", function() {
+                    d3.select(this).attr("stroke", "white").attr("stroke-width", 1);
+                });
+            
+            // 绘制种子点
+            svg.selectAll(".seed-point")
+                .data(points)
+                .enter().append("circle")
+                .attr("class", "seed-point")
+                .attr("cx", d => d[0])
+                .attr("cy", d => d[1])
+                .attr("r", 3)
+                .attr("fill", "black");
+                
+            currentElements = svg.selectAll(".voronoi-cell").nodes();
+        }
+        
+        function generateTriangles() {
+            // 清除现有元素
+            svg.selectAll("*").remove();
+            
+            // 获取三角形数据
+            const triangles = [];
+            for (let i = 0; i < delaunay.triangles.length; i += 3) {
+                triangles.push([
+                    points[delaunay.triangles[i]],
+                    points[delaunay.triangles[i + 1]],
+                    points[delaunay.triangles[i + 2]]
+                ]);
+            }
+            
+            // 绘制三角形
+            svg.selectAll(".triangle")
+                .data(triangles)
+                .enter().append("path")
+                .attr("class", "triangle")
+                .attr("d", (d) => `M${d[0][0]},${d[0][1]}L${d[1][0]},${d[1][1]}L${d[2][0]},${d[2][1]}Z`)
+                .attr("fill", "none")
+                .attr("stroke", "black")
+                .attr("stroke-width", 1)
+                .on("mouseover", function() {
+                    d3.select(this).attr("stroke", "red").attr("stroke-width", 2);
+                })
+                .on("mouseout", function() {
+                    d3.select(this).attr("stroke", "black").attr("stroke-width", 1);
+                });
+                
+            // 绘制顶点
+            svg.selectAll(".triangle-point")
+                .data(points)
+                .enter().append("circle")
+                .attr("class", "triangle-point")
+                .attr("cx", d => d[0])
+                .attr("cy", d => d[1])
+                .attr("r", 3)
+                .attr("fill", "black");
+                
+            currentElements = svg.selectAll(".triangle").nodes();
+        }
+        
+        // 6. 切换函数
+        function toggleView() {
+            const duration = 500;
+            
+            if (showVoronoi) {
+                // 淡出Voronoi图
+                svg.selectAll(".voronoi-cell")
+                    .transition()
+                    .duration(duration)
+                    .attr("fill-opacity", 0)
+                    .attr("stroke-width", 0)
+                    .remove();
+                
+                svg.selectAll(".seed-point")
+                    .transition()
+                    .duration(duration)
+                    .attr("r", 0)
+                    .remove();
+                
+                // 生成三角网格
+                generateTriangles();
+                
+                // 淡入三角网格
+                svg.selectAll(".triangle")
+                    .attr("stroke-width", 0)
+                    .transition()
+                    .duration(duration)
+                    .attr("stroke-width", 1);
+                    
+                svg.selectAll(".triangle-point")
+                    .attr("r", 0)
+                    .transition()
+                    .duration(duration)
+                    .attr("r", 3);
+                    
+                d3.select("#currentView").text("三角网格");
+            } else {
+                // 淡出三角网格
+                svg.selectAll(".triangle")
+                    .transition()
+                    .duration(duration)
+                    .attr("stroke-width", 0)
+                    .remove();
+                    
+                svg.selectAll(".triangle-point")
+                    .transition()
+                    .duration(duration)
+                    .attr("r", 0)
+                    .remove();
+                
+                // 生成Voronoi图
+                generateVoronoi();
+                
+                // 淡入Voronoi图
+                svg.selectAll(".voronoi-cell")
+                    .attr("fill-opacity", 0)
+                    .attr("stroke-width", 0)
+                    .transition()
+                    .duration(duration)
+                    .attr("fill-opacity", 0.6)
+                    .attr("stroke-width", 1);
+                    
+                svg.selectAll(".seed-point")
+                    .attr("r", 0)
+                    .transition()
+                    .duration(duration)
+                    .attr("r", 3);
+                    
+                d3.select("#currentView").text("Voronoi图");
+            }
+            
+            showVoronoi = !showVoronoi;
+        }
+        
+        // 7. 初始化视图
+        generateVoronoi();
+        
+        // 8. 绑定按钮事件
+        d3.select("#toggleBtn").on("click", toggleView);
+    </script>
+</body>
+</html>
